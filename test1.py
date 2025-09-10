@@ -44,6 +44,11 @@ beep_cooldown = 0
 road_left = WIDTH // 3
 road_right = 2 * WIDTH // 3
 
+# Horn system
+no_horn_zone = False
+horn_warning_time = 0
+horn_violation_particles = []
+
 clock = pygame.time.Clock()
 running = True
 
@@ -119,40 +124,6 @@ def draw_realistic_car():
     pygame.draw.rect(win, (0, 0, 100), (car_x - 5, car_y + 30, 8, 10))
     pygame.draw.rect(win, (0, 0, 100), (car_x + car_width - 3, car_y + 30, 8, 10))
 
-def draw_realistic_sign(sign):
-    x, y = sign["x"], sign["y"]
-    
-    # Sign post shadow
-    pygame.draw.line(win, (30, 30, 30), (x + 2, y + 42), (x + 2, y + 120), 8)
-    
-    # Sign post
-    pygame.draw.line(win, (100, 100, 100), (x, y + 40), (x, y + 120), 6)
-    
-    # Sign shadow
-    pygame.draw.circle(win, (30, 30, 30), (x + 3, y + 3), 42)
-    
-    # Sign background (white circle)
-    pygame.draw.circle(win, WHITE, (x, y), 40)
-    
-    # Red border with gradient effect
-    pygame.draw.circle(win, RED, (x, y), 40, 5)
-    pygame.draw.circle(win, (200, 0, 0), (x, y), 35, 2)
-    
-    # Speed limit number with shadow
-    limit_text = font.render(str(sign["limit"]), True, (50, 50, 50))
-    shadow_rect = limit_text.get_rect(center=(x + 1, y - 3))
-    win.blit(limit_text, shadow_rect)
-    
-    limit_text = font.render(str(sign["limit"]), True, BLACK)
-    text_rect = limit_text.get_rect(center=(x, y - 5))
-    win.blit(limit_text, text_rect)
-    
-    # "km/h" text
-    small_font = pygame.font.SysFont("Arial", 16)
-    kmh_text = small_font.render("km/h", True, BLACK)
-    kmh_rect = kmh_text.get_rect(center=(x, y + 15))
-    win.blit(kmh_text, kmh_rect)
-
 def create_particle_effect(x, y, color):
     particles = []
     for _ in range(5):
@@ -187,108 +158,69 @@ def draw_particles(particles):
 overspeed_particles = []
 
 while running:
-    # Background with gradient effect
+    # Background gradient
     for y in range(HEIGHT):
         gray_value = 169 - int(y * 0.1)
         color = (max(0, gray_value), max(0, gray_value), max(0, gray_value))
         pygame.draw.line(win, color, (0, y), (WIDTH, y))
     
-    # Draw animated road
+    # Draw road and car
     draw_animated_road()
-    
-    # Draw realistic car
     draw_realistic_car()
     
-    # Keyboard controls for car speed with smooth acceleration
+    # Car speed control
     keys = pygame.key.get_pressed()
     if keys[pygame.K_UP]:
         car_speed += 0.5
     elif keys[pygame.K_DOWN]:
         car_speed -= 0.5
     else:
-        # Natural deceleration
         if car_speed > 0:
             car_speed -= 0.1
     
     car_speed = max(0, min(car_speed, 120))
     
-    # Generate traffic sign every 5 seconds
-    if pygame.time.get_ticks() - last_sign_time > 5000:
-        speed_limit = random.choice([40, 60, 80, 100])
-        sign_x = random.randint(road_left + 50, road_right - 50)
-        signs.append({"x": sign_x, "y": -60, "limit": speed_limit})
-        last_sign_time = pygame.time.get_ticks()
-    
-    # Draw and move traffic signs with realistic physics
-    for sign in signs[:]:
-        sign["y"] += 3 + car_speed * 0.05  # Speed affects sign falling speed
-        draw_realistic_sign(sign)
-        
-        if sign["y"] > HEIGHT:
-            signs.remove(sign)
-    
-    # Display info with better styling
-    speed_bg = pygame.Surface((250, 40))
-    speed_bg.set_alpha(150)
-    speed_bg.fill(BLACK)
-    win.blit(speed_bg, (10, 10))
-    
+    # Info HUD
     speed_text = font.render(f"Car Speed: {int(car_speed)} km/h", True, WHITE)
     win.blit(speed_text, (20, 20))
-    
-    limit_bg = pygame.Surface((280, 40))
-    limit_bg.set_alpha(150)
-    limit_bg.fill(BLACK)
-    win.blit(limit_bg, (10, 55))
-    
     limit_text = font.render(f"Speed Limit: {speed_limit} km/h", True, WHITE)
-    win.blit(limit_text, (20, 65))
+    win.blit(limit_text, (20, 60))
     
-    # Overspeed check with enhanced effects
+    # Overspeed check
     if car_speed > speed_limit:
-        # Flashing warning with alpha effect
-        flash_alpha = int(128 + 127 * math.sin(pygame.time.get_ticks() * 0.01))
-        warning_surface = pygame.Surface((WIDTH, 100))
-        warning_surface.set_alpha(flash_alpha)
-        warning_surface.fill(RED)
-        win.blit(warning_surface, (0, HEIGHT // 2 - 50))
-        
-        warning = big_font.render("OVERSPEEDING!", True, WHITE)
-        warning_rect = warning.get_rect(center=(WIDTH // 2, HEIGHT // 2))
-        win.blit(warning, warning_rect)
-        
-        # Create particles
-        if random.random() < 0.3:
-            overspeed_particles.extend(create_particle_effect(WIDTH // 2, HEIGHT // 2, RED))
-        
-        # Beep sound with cooldown
-        if beep_cooldown <= 0:
-            try:
-                winsound.Beep(1000, 100)
-                beep_cooldown = 30
-            except:
-                pass
+        warning = big_font.render("OVERSPEEDING!", True, RED)
+        win.blit(warning, (WIDTH//2 - 150, HEIGHT//2 - 50))
     
-    if beep_cooldown > 0:
-        beep_cooldown -= 1
-    
-    # Update and draw particles
+    # Update particles
     update_particles(overspeed_particles)
     draw_particles(overspeed_particles)
-    
-    # Speed blur effect when going fast
-    if car_speed > 80:
-        blur_surface = pygame.Surface((WIDTH, HEIGHT))
-        blur_surface.set_alpha(20)
-        blur_surface.fill(WHITE)
-        win.blit(blur_surface, (0, 0))
-    
+    update_particles(horn_violation_particles)
+    draw_particles(horn_violation_particles)
+
     # Event handling
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
+        elif event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_h:  # Horn
+                if no_horn_zone:
+                    if horn_warning_time <= 0:
+                        horn_warning_time = 120
+                        horn_violation_particles.extend(create_particle_effect(WIDTH // 2, HEIGHT // 3, YELLOW))
+                        try:
+                            winsound.Beep(1500, 200)
+                        except:
+                            pass
+                else:
+                    try:
+                        winsound.Beep(400, 200)
+                    except:
+                        pass
+    
+    if horn_warning_time > 0:
+        horn_warning_time -= 1
     
     pygame.display.update()
-    clock.tick(60)  # Increased to 60 FPS for smoother animation
+    clock.tick(60)
 
 pygame.quit()
